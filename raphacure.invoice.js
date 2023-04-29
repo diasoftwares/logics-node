@@ -1,15 +1,15 @@
 const XLSX = require("xlsx");
-const path = require("path");
 const fs = require("fs");
-const { stringify } = require("querystring");
 
 const script = async () => {
   try {
     console.log("running raphacure invoice logic");
 
     const raphacureJSON = convertToJSON("./assets/raphacure_admin.xlsx", true);
-
     fs.writeFileSync("./assets/raphacureJSON.json", raphacureJSON);
+
+    const neubergJSON = convertToJSON("./assets/neuberg.xlsx", false);
+    fs.writeFileSync("./assets/neubergJSON.json", neubergJSON);
   } catch (e) {
     console.log(e);
   }
@@ -43,6 +43,17 @@ const convertToJSON = (path, headerNotHeader) => {
     return JSON.stringify(data);
   } else {
     return JSON.stringify(rows);
+  }
+};
+
+const convertToMoment = (dateValue) => {
+  try {
+    const dateMoment = moment(dateValue);
+    return dateMoment;
+  } catch (e) {
+    const XLSX = require("xlsx");
+    const date = XLSX.SSF.format("mm/dd/yyyy", dateValue);
+    return moment(date);
   }
 };
 

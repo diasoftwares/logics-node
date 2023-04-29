@@ -5,7 +5,7 @@ const constants = Object.freeze({
     status: "Status",
     visit_type: "Visit Type Id",
     visit_type: "Visit Type",
-    requested_on: "Requested On",
+    date: "Requested On",
     scheduled_on: "Scheduled On",
     appointment_time: "Appointment Time",
     payment_status: "Payment Status",
@@ -26,5 +26,12 @@ const constants = Object.freeze({
     comment: "Comment",
     compid: "compid",
     employee_id: "Employee ID",
+  },
+  neuberg: {
+    booking_id: "Reg. No",
+    date: "Date",
+    service: "Tests",
+    net: "Net",
+    city: "CITY",
   },
 });
