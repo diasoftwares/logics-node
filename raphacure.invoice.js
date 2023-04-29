@@ -1,15 +1,24 @@
 const XLSX = require("xlsx");
 const fs = require("fs");
+const clients = require("./config/clients");
+const verifiers = require("./config/verifiers");
+const headers = require("./config/headers");
+const _ = require("lodash");
 
 const script = async () => {
   try {
+    const client = clients.neuberg;
     console.log("running raphacure invoice logic");
 
     const raphacureJSON = convertToJSON("./assets/raphacure_admin.xlsx", true);
-    fs.writeFileSync("./assets/raphacureJSON.json", raphacureJSON);
 
     const neubergJSON = convertToJSON("./assets/neuberg.xlsx", false);
-    fs.writeFileSync("./assets/neubergJSON.json", neubergJSON);
+
+    const verificationResponse = verifyData(raphacureJSON, neubergJSON, client);
+    fs.writeFileSync(
+      "./assets/verificationResponse.json",
+      JSON.stringify(verificationResponse),
+    );
   } catch (e) {
     console.log(e);
   }
@@ -40,9 +49,9 @@ const convertToJSON = (path, headerNotHeader) => {
         data.push(eachItem);
       }
     });
-    return JSON.stringify(data);
+    return data;
   } else {
-    return JSON.stringify(rows);
+    return rows;
   }
 };
 
@@ -55,6 +64,106 @@ const convertToMoment = (dateValue) => {
     const date = XLSX.SSF.format("mm/dd/yyyy", dateValue);
     return moment(date);
   }
+};
+
+const verifyData = (raphacureList, clientList, clientType) => {
+  const needToVerify = verifiers[clientType];
+  const response = {};
+  const mismatches = [];
+  const raphacureIdsEmpty = [];
+  const clientIdsEmpty = [];
+
+  const idsInRaphacure = [];
+  const idsInClient = [];
+
+  raphacureList.forEach((item, index) => {
+    if (item[headers.raphacure.booking_id]) {
+      idsInRaphacure.push(item[headers.raphacure.booking_id].trim());
+    } else {
+      raphacureIdsEmpty.push({
+        name: item[headers.raphacure.name],
+        row_id: index,
+      });
+    }
+  });
+
+  console.log("raphacure list", raphacureList.length)
+
+  clientList.forEach((item, index) => {
+    if (item[headers[clientType].booking_id]) {
+      idsInClient.push(item[headers[clientType].booking_id].trim());
+    } else {
+      clientIdsEmpty.push({
+        name: item[headers[clientType].name],
+        row_id: index,
+      });
+    }
+  });
+
+  console.log("client list", clientList.length)
+
+
+  //Checking missing items in both the
+  const missingInRaphacure = _.differenceWith(
+    idsInRaphacure,
+    idsInClient,
+    _.isEqual,
+  );
+  const missingInClient = _.differenceWith(
+    idsInClient,
+    idsInRaphacure,
+    _.isEqual,
+  );
+
+  const allIds = _.union(missingInRaphacure, missingInClient);
+
+  for (const id of allIds) {
+    const raphacure = raphacureList.find(
+      (item) => item[headers.raphacure.booking_id] == id.trim(),
+    );
+    const client = clientList.find(
+      (item) => item[headers[clientType].booking_id] == id,
+    );
+
+    if (raphacure && client) {
+      for (const verifierItem of needToVerify) {
+        if (verifierItem == "date") {
+          const raphacureMoment = convertToMoment(
+            raphacure[verifierItem].trim(),
+          );
+          const clientMoment = convertToMoment(client[verifierItem].trim());
+
+          if (!raphacureMoment.isSame(clientMoment, "day")) {
+            const raphacure_key = `raphacure_${verifierItem}`;
+            const client_key = `client_${verifierItem}`;
+            mismatches.push({
+              booking_id: id,
+              [raphacure_key]: raphacure[verifierItem].trim(),
+              [client_key]: client[verifierItem].trim(),
+            });
+          }
+        } else if (
+          raphacure[verifierItem].trim() != client[verifierItem].trim()
+        ) {
+          const raphacure_key = `raphacure_${verifierItem}`;
+          const client_key = `client_${verifierItem}`;
+          mismatches.push({
+            booking_id: id,
+            [raphacure_key]: raphacure[verifierItem].trim(),
+            [client_key]: client[verifierItem].trim(),
+          });
+        }
+      }
+    }
+  }
+
+  response.missingInRaphacure = missingInRaphacure;
+  response.missingInClient = missingInClient;
+  response.raphacureIdsEmpty = raphacureIdsEmpty;
+  response.clientIdsEmpty = clientIdsEmpty;
+  response.mismatches = mismatches;
+
+  return response;
 };
 
 script();
