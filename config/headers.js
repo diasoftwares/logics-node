@@ -1,4 +1,4 @@
-const constants = Object.freeze({
+const headers = Object.freeze({
   raphacure: {
     booking_id: "Booking ID",
     service: "Service",
@@ -35,3 +35,5 @@ const constants = Object.freeze({
     city: "CITY",
   },
 });
+
+module.exports = headers;
