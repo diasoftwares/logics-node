@@ -4,6 +4,7 @@ const clients = require("./config/clients");
 const verifiers = require("./config/verifiers");
 const headers = require("./config/headers");
 const _ = require("lodash");
+const moment = require("moment");
 
 const script = async () => {
   try {
@@ -33,7 +34,6 @@ const convertToJSON = (path, headerNotHeader) => {
 
   if (headerNotHeader) {
     const headers = Object.values(rows[0]);
-    console.log(headers);
     // Iterate through each row
     const data = [];
     rows.forEach((row, index) => {
@@ -57,13 +57,27 @@ const convertToJSON = (path, headerNotHeader) => {
 
 const convertToMoment = (dateValue) => {
   try {
-    const dateMoment = moment(dateValue);
-    return dateMoment;
+
+    if (typeof dateValue == "number") {
+      const date = XLSX.SSF.format("mm/dd/yyyy", dateValue);
+      const dateMoment = moment(date);
+      return dateMoment;
+    } else {
+      const dateMoment = moment(extractOnlyDateFromString(dateValue), "DD/MM/YYYY");
+      return dateMoment;
+    }
   } catch (e) {
-    const XLSX = require("xlsx");
-    const date = XLSX.SSF.format("mm/dd/yyyy", dateValue);
-    return moment(date);
+    console.log("error", e);
+    return null;
   }
+};
+
+const extractOnlyDateFromString = (dateString) => {
+  const regex = /^(\d{2}\/\d{2}\/\d{4})/;
+   const onlyDate = dateString.match(regex)[1];
+   console.log(dateString,onlyDate)
+   return onlyDate
+
 };
 
 const verifyData = (raphacureList, clientList, clientType) => {
@@ -128,10 +142,20 @@ const verifyData = (raphacureList, clientList, clientType) => {
       const itemMismatch = [];
       for (const verifierItem of needToVerify) {
         if (verifierItem == "date") {
+          /* console.log("checking for date", id);
+          console.log(
+            raphacure[headers.raphacure[verifierItem]],
+            client[headers[clientType][verifierItem]],
+          );
+          console.log(
+            _.isEmpty(raphacure[headers.raphacure[verifierItem]]),
+            !client[headers[clientType][verifierItem]],
+          );*/
           if (
-            !raphacure[headers.raphacure[headers.raphacure[verifierItem]]] ||
+            _.isEmpty(raphacure[headers.raphacure[verifierItem]]) ||
             !client[headers[clientType][verifierItem]]
           ) {
+            //console.log("raphacure or client data empty", id);
             const raphacure_key = `raphacure_${verifierItem}`;
             const client_key = `client_${verifierItem}`;
             itemMismatch.push({
@@ -139,24 +163,32 @@ const verifyData = (raphacureList, clientList, clientType) => {
               [client_key]: client[headers[clientType][verifierItem]],
             });
           } else {
+            //console.log("raphacure and client data empty", id);
+
             const raphacureMoment = convertToMoment(
-              raphacure[headers.raphacure[verifierItem]].trim(),
+              raphacure[headers.raphacure[verifierItem]],
             );
-            const clientMoment = convertToMoment(client[headers[clientType][verifierItem]].trim());
+            const clientMoment = convertToMoment(
+              client[headers[clientType][verifierItem]],
+            );
+
+            console.log( raphacure[headers.raphacure[verifierItem]],client[headers[clientType][verifierItem]] )
+            console.log(raphacureMoment, clientMoment);
 
             if (!raphacureMoment.isSame(clientMoment, "day")) {
               const raphacure_key = `raphacure_${verifierItem}`;
               const client_key = `client_${verifierItem}`;
               itemMismatch.push({
-                [raphacure_key]: raphacure[headers.raphacure[verifierItem]].trim(),
-                [client_key]: client[headers[clientType][verifierItem]].trim(),
+                [raphacure_key]: raphacure[headers.raphacure[verifierItem]],
+                [client_key]: client[headers[clientType][verifierItem]],
               });
             }
           }
         } else if (
           !raphacure[headers.raphacure[verifierItem]] ||
           !client[headers[clientType][verifierItem]] ||
-          raphacure[headers.raphacure[verifierItem]].trim() != client[headers[clientType][verifierItem]].trim()
+          raphacure[headers.raphacure[verifierItem]].trim() !=
+            client[headers[clientType][verifierItem]].trim()
         ) {
           const raphacure_key = `raphacure_${verifierItem}`;
           const client_key = `client_${verifierItem}`;
