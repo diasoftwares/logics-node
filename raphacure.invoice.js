@@ -70,13 +70,13 @@ const verifyData = (raphacureList, clientList, clientType) => {
   const needToVerify = verifiers[clientType];
   const response = {};
   const mismatches = [];
-  const raphacureIdsEmpty = [];
+  //const raphacureIdsEmpty = [];
   const clientIdsEmpty = [];
-
-  const idsInRaphacure = [];
+  const missingInRaphacure = [];
+  // const idsInRaphacure = [];
   const idsInClient = [];
 
-  raphacureList.forEach((item, index) => {
+  /*raphacureList.forEach((item, index) => {
     if (item[headers.raphacure.booking_id]) {
       idsInRaphacure.push(item[headers.raphacure.booking_id].trim());
     } else {
@@ -85,9 +85,9 @@ const verifyData = (raphacureList, clientList, clientType) => {
         row_id: index,
       });
     }
-  });
+  });*/
 
-  console.log("raphacure list", raphacureList.length)
+  console.log("raphacure list", raphacureList.length);
 
   clientList.forEach((item, index) => {
     if (item[headers[clientType].booking_id]) {
@@ -100,11 +100,10 @@ const verifyData = (raphacureList, clientList, clientType) => {
     }
   });
 
-  console.log("client list", clientList.length)
-
+  console.log("client list", clientList.length);
 
   //Checking missing items in both the
-  const missingInRaphacure = _.differenceWith(
+  /*const missingInRaphacure = _.differenceWith(
     idsInRaphacure,
     idsInClient,
     _.isEqual,
@@ -115,9 +114,9 @@ const verifyData = (raphacureList, clientList, clientType) => {
     _.isEqual,
   );
 
-  const allIds = _.union(missingInRaphacure, missingInClient);
+  const allIds = _.union(missingInRaphacure, missingInClient);*/
 
-  for (const id of allIds) {
+  for (const id of idsInClient) {
     const raphacure = raphacureList.find(
       (item) => item[headers.raphacure.booking_id] == id.trim(),
     );
@@ -125,41 +124,61 @@ const verifyData = (raphacureList, clientList, clientType) => {
       (item) => item[headers[clientType].booking_id] == id,
     );
 
-    if (raphacure && client) {
+    if (raphacure) {
+      const itemMismatch = [];
       for (const verifierItem of needToVerify) {
         if (verifierItem == "date") {
-          const raphacureMoment = convertToMoment(
-            raphacure[verifierItem].trim(),
-          );
-          const clientMoment = convertToMoment(client[verifierItem].trim());
-
-          if (!raphacureMoment.isSame(clientMoment, "day")) {
+          if (
+            !raphacure[headers.raphacure[headers.raphacure[verifierItem]]] ||
+            !client[headers[clientType][verifierItem]]
+          ) {
             const raphacure_key = `raphacure_${verifierItem}`;
             const client_key = `client_${verifierItem}`;
-            mismatches.push({
-              booking_id: id,
-              [raphacure_key]: raphacure[verifierItem].trim(),
-              [client_key]: client[verifierItem].trim(),
+            itemMismatch.push({
+              [raphacure_key]: raphacure[headers.raphacure[verifierItem]],
+              [client_key]: client[headers[clientType][verifierItem]],
             });
+          } else {
+            const raphacureMoment = convertToMoment(
+              raphacure[headers.raphacure[verifierItem]].trim(),
+            );
+            const clientMoment = convertToMoment(client[headers[clientType][verifierItem]].trim());
+
+            if (!raphacureMoment.isSame(clientMoment, "day")) {
+              const raphacure_key = `raphacure_${verifierItem}`;
+              const client_key = `client_${verifierItem}`;
+              itemMismatch.push({
+                [raphacure_key]: raphacure[headers.raphacure[verifierItem]].trim(),
+                [client_key]: client[headers[clientType][verifierItem]].trim(),
+              });
+            }
           }
         } else if (
-          raphacure[verifierItem].trim() != client[verifierItem].trim()
+          !raphacure[headers.raphacure[verifierItem]] ||
+          !client[headers[clientType][verifierItem]] ||
+          raphacure[headers.raphacure[verifierItem]].trim() != client[headers[clientType][verifierItem]].trim()
         ) {
           const raphacure_key = `raphacure_${verifierItem}`;
           const client_key = `client_${verifierItem}`;
-          mismatches.push({
-            booking_id: id,
-            [raphacure_key]: raphacure[verifierItem].trim(),
-            [client_key]: client[verifierItem].trim(),
+          itemMismatch.push({
+            [raphacure_key]: raphacure[headers.raphacure[verifierItem]],
+            [client_key]: client[headers[clientType][verifierItem]],
           });
         }
       }
+
+      if (itemMismatch.length > 0) {
+        mismatches.push({
+          booking_id: id,
+          itemMismatch,
+        });
+      }
+    } else {
+      missingInRaphacure.push(id);
     }
   }
 
   response.missingInRaphacure = missingInRaphacure;
-  response.missingInClient = missingInClient;
-  response.raphacureIdsEmpty = raphacureIdsEmpty;
   response.clientIdsEmpty = clientIdsEmpty;
   response.mismatches = mismatches;
 
