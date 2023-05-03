@@ -3,7 +3,7 @@ const headers = Object.freeze({
     booking_id: "Booking ID",
     service: "Service",
     status: "Status",
-    visit_type: "Visit Type Id",
+    visit_type_id: "Visit Type Id",
     visit_type: "Visit Type",
     date: "Requested On",
     scheduled_on: "Scheduled On",
@@ -33,6 +33,7 @@ const headers = Object.freeze({
     service: "Tests",
     net: "Net",
     city: "CITY",
+    name : "Name"
   },
 });
 
