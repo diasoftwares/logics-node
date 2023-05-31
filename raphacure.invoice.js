@@ -5,33 +5,74 @@ const verifiers = require("./config/verifiers");
 const headers = require("./config/headers");
 const _ = require("lodash");
 const moment = require("moment");
+const ExcelJS = require("exceljs");
 
 const script = async () => {
   try {
     const client = clients.neuberg;
     console.log("running raphacure invoice logic");
 
-    const raphacureJSON = convertToJSON("./assets/raphacure_admin.xlsx", true);
+    const raphacureJSON = await convertToJSON(
+      "./assets/raphacure_admin.xlsx",
+      true,
+    );
 
-    const neubergJSON = convertToJSON("./assets/neuberg.xlsx", false);
+    console.log("raphacureJSON headers", raphacureJSON.headers);
 
-    const verificationResponse = verifyData(raphacureJSON, neubergJSON, client);
+    const neubergJSON = await convertToJSON("./assets/neuberg.xlsx", false);
+
+    console.log("neubergJSON headers", neubergJSON.headers);
+
+    const { response, correctItemsData } = verifyData(
+      raphacureJSON,
+      neubergJSON,
+      client,
+    );
     fs.writeFileSync(
       "./assets/verificationResponse.json",
-      JSON.stringify(verificationResponse),
+      JSON.stringify(response),
     );
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Correct Invoices");
+
+    console.log("correctItemsData",correctItemsData)
+    correctItemsData.forEach((row, rowIndex) => {
+      row.forEach((value, colIndex) => { 
+        let cell = worksheet.getCell(rowIndex + 1, colIndex + 1);
+        cell.value = value;
+
+        //For coloring
+        /*if (colorRows.includes(rowIndex)) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFFF00" },
+          };
+        }*/
+      });
+    });
+
+
+    const filePath = `./assets/verificationResponse.xlsx`;
+
+    await workbook.xlsx.writeFile(filePath);
+
+    console.log("Completed running")
   } catch (e) {
     console.log(e);
   }
 };
 
-const convertToJSON = (path, headerNotHeader) => {
+const convertToJSON = async (path, headerNotHeader) => {
   const workbook = XLSX.readFile(path);
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
   // Convert the worksheet to an array of objects
   const rows = XLSX.utils.sheet_to_json(worksheet);
 
+  let list;
+  let headersData;
   if (headerNotHeader) {
     const headers = Object.values(rows[0]);
     // Iterate through each row
@@ -49,21 +90,42 @@ const convertToJSON = (path, headerNotHeader) => {
         data.push(eachItem);
       }
     });
-    return data;
+    list = data;
+
+    headersData = await getExcelHeaders(path);
   } else {
-    return rows;
+    list = rows;
+    headersData = await getExcelHeaders(path);
   }
+
+  return { list, headers: headersData };
 };
+
+async function getExcelHeaders(path) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path);
+
+  const worksheet = workbook.worksheets[0]; // Assuming the headers are in the first worksheet
+
+  const headers = [];
+  worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell) => {
+    headers.push(cell.value);
+  });
+
+  return headers;
+}
 
 const convertToMoment = (dateValue) => {
   try {
-
     if (typeof dateValue == "number") {
       const date = XLSX.SSF.format("mm/dd/yyyy", dateValue);
       const dateMoment = moment(date);
       return dateMoment;
     } else {
-      const dateMoment = moment(extractOnlyDateFromString(dateValue), "DD/MM/YYYY");
+      const dateMoment = moment(
+        extractOnlyDateFromString(dateValue),
+        "DD/MM/YYYY",
+      );
       return dateMoment;
     }
   } catch (e) {
@@ -74,13 +136,12 @@ const convertToMoment = (dateValue) => {
 
 const extractOnlyDateFromString = (dateString) => {
   const regex = /^(\d{2}\/\d{2}\/\d{4})/;
-   const onlyDate = dateString.match(regex)[1];
-   console.log(dateString,onlyDate)
-   return onlyDate
-
+  const onlyDate = dateString.match(regex)[1];
+  console.log(dateString, onlyDate);
+  return onlyDate;
 };
 
-const verifyData = (raphacureList, clientList, clientType) => {
+const verifyData = (raphacureData, clientData, clientType) => {
   const needToVerify = verifiers[clientType];
   const response = {};
   const mismatches = [];
@@ -89,6 +150,13 @@ const verifyData = (raphacureList, clientList, clientType) => {
   const missingInRaphacure = [];
   // const idsInRaphacure = [];
   const idsInClient = [];
+
+  const raphacureList = raphacureData.list;
+  const clientList = clientData.list;
+  const clientHeaders = clientData.headers;
+
+  const correctItemsData = [];
+  correctItemsData.push(clientHeaders);
 
   /*raphacureList.forEach((item, index) => {
     if (item[headers.raphacure.booking_id]) {
@@ -137,7 +205,6 @@ const verifyData = (raphacureList, clientList, clientType) => {
     const client = clientList.find(
       (item) => item[headers[clientType].booking_id] == id,
     );
-
     if (raphacure) {
       const itemMismatch = [];
       for (const verifierItem of needToVerify) {
@@ -172,7 +239,10 @@ const verifyData = (raphacureList, clientList, clientType) => {
               client[headers[clientType][verifierItem]],
             );
 
-            console.log( raphacure[headers.raphacure[verifierItem]],client[headers[clientType][verifierItem]] )
+            console.log(
+              raphacure[headers.raphacure[verifierItem]],
+              client[headers[clientType][verifierItem]],
+            );
             console.log(raphacureMoment, clientMoment);
 
             if (!raphacureMoment.isSame(clientMoment, "day")) {
@@ -204,6 +274,12 @@ const verifyData = (raphacureList, clientList, clientType) => {
           booking_id: id,
           itemMismatch,
         });
+      } else {
+        const itemData = [];
+        for (const clientHeader of clientHeaders) {
+          itemData.push(client[clientHeader]);
+        }
+        correctItemsData.push(itemData);
       }
     } else {
       missingInRaphacure.push(id);
@@ -214,7 +290,8 @@ const verifyData = (raphacureList, clientList, clientType) => {
   response.clientIdsEmpty = clientIdsEmpty;
   response.mismatches = mismatches;
 
-  return response;
+  console.log("correctItemsData", correctItemsData)
+  return { response, correctItemsData };
 };
 
 script();
