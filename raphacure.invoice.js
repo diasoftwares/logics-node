@@ -6,6 +6,7 @@ const headers = require("./config/headers");
 const _ = require("lodash");
 const moment = require("moment");
 const ExcelJS = require("exceljs");
+const csv = require('csv-parser');
 
 const script = async () => {
   try {
@@ -19,7 +20,7 @@ const script = async () => {
 
     console.log("raphacureJSON headers", raphacureJSON.headers);
 
-    const neubergJSON = await convertToJSON("./assets/neuberg.xlsx", false);
+    const neubergJSON = await convertToJSONFromCSV("./assets/Neuberg_june 2023_data.csv", false);
 
     console.log("neubergJSON headers", neubergJSON.headers);
 
@@ -100,6 +101,39 @@ const convertToJSON = async (path, headerNotHeader) => {
 
   return { list, headers: headersData };
 };
+
+
+const convertToJSONFromCSV = async (path) => {
+  try {
+    const jsonData = [];
+    const headers = [];
+
+    await new Promise((resolve, reject) => {
+      fs.createReadStream(path)
+        .pipe(csv())
+        .on('data', (row) => {
+          jsonData.push(row);
+
+          if (headers.length === 0) {
+            headers.push(...Object.keys(row));
+          }
+        })
+        .on('end', () => {
+          console.log('CSV file successfully processed.');
+          resolve();
+        })
+        .on('error', (error) => {
+          reject(error);
+        });
+    });
+
+    return { list: jsonData, headers: headers };
+  } catch (error) {
+    console.error('Error:', error);
+    return { list: [], headers: [] };
+  }
+};
+
 
 async function getExcelHeaders(path) {
   const workbook = new ExcelJS.Workbook();
